@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2d5a27">
+    <meta name="description" content="Planning de nettoyage cuisine - Colocation">
+    <title>🍳 KitchenDuty</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍳</text></svg>">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="lang-switch">
+                <button id="langFr" class="lang-btn active">FR</button>
+                <button id="langIt" class="lang-btn">IT</button>
+            </div>
+            <h1>🍳 KitchenDuty</h1>
+            <p class="subtitle"><span data-i18n="week">Semaine</span> <span id="weekNumber"></span></p>
+        </header>
+
+        <main>
+            <!-- Current duty -->
+            <section class="current-duty">
+                <p class="label" data-i18n="currentTurn">C'est le tour de</p>
+                <div class="current-person" id="currentPerson"></div>
+                <button class="btn-done" id="btnDone">✓ <span data-i18n="markDone">Marquer comme fait</span></button>
+                <button class="btn-undo" id="btnUndo" style="display:none;">↩ <span data-i18n="undo">Annuler</span></button>
+            </section>
+
+            <!-- Checklist -->
+            <section class="checklist">
+                <h2>✅ <span data-i18n="checklistTitle">Checklist</span></h2>
+                <ul id="checklistItems">
+                    <li><label><input type="checkbox" data-task="poubelle"> <span data-i18n="task_poubelle">Poubelle (cartons et compartiments)</span></label></li>
+                    <li><label><input type="checkbox" data-task="plaques"> <span data-i18n="task_plaques">Nettoyer les plaques</span></label></li>
+                    <li><label><input type="checkbox" data-task="table"> <span data-i18n="task_table">Table</span></label></li>
+                    <li><label><input type="checkbox" data-task="evier"> <span data-i18n="task_evier">Évier</span></label></li>
+                    <li><label><input type="checkbox" data-task="machine"> <span data-i18n="task_machine">Vider la machine</span></label></li>
+                    <li><label><input type="checkbox" data-task="sol"> <span data-i18n="task_sol">Faire le sol</span></label></li>
+                    <li><label><input type="checkbox" data-task="sacs"> <span data-i18n="task_sacs">Check des sacs poubelle</span></label></li>
+                    <li><label><input type="checkbox" data-task="four"> <span data-i18n="task_four">Four</span></label></li>
+                </ul>
+                <p class="checklist-progress"><span id="checklistCount">0</span>/8 <span data-i18n="completed">complété</span></p>
+            </section>
+
+            <!-- Swap section -->
+            <section class="swap-section">
+                <button class="btn-swap" id="btnSwapToggle">🔄 Proposer un échange</button>
+                <div class="swap-modal" id="swapModal">
+                    <p>Échanger avec :</p>
+                    <div class="swap-options" id="swapOptions"></div>
+                    <button class="btn-cancel" id="btnCancelSwap">Annuler</button>
+                </div>
+            </section>
+
+            <!-- Schedule -->
+            <section class="schedule">
+                <h2>📅 <span data-i18n="nextWeeks">Prochaines semaines</span></h2>
+                <ul id="scheduleList"></ul>
+            </section>
+
+            <!-- History -->
+            <section class="history">
+                <h2>📜 <span data-i18n="history">Historique</span></h2>
+                <ul id="historyList"></ul>
+            </section>
+
+            <!-- Calendar export -->
+            <section class="export">
+                <button class="btn-export" id="btnExport">📆 <span data-i18n="addCalendar">Ajouter à mon calendrier</span></button>
+            </section>
+        </main>
+
+        <footer>
+            <p>Coloc Crew 🏠</p>
+            <button class="btn-install" id="btnInstall" style="display:none;">📲 Installer l'app</button>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
