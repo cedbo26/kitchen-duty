@@ -1,16 +1,20 @@
 {
   "rules": {
+    "assignments": {
+      ".read": true,
+      ".write": true
+    },
     "swaps": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "history": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "weeks": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     }
   }
 }

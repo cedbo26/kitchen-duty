@@ -16,7 +16,8 @@ const StorageModule = {
         weekStates: {},
         history: null,
         swaps: null,
-        checklist: null
+        checklist: null,
+        assignments: null
     },
 
     // Flag pour éviter les boucles infinies lors des listeners
@@ -258,6 +259,58 @@ const StorageModule = {
 
     saveChecklist(data) {
         localStorage.setItem('kitchenDuty_checklist', JSON.stringify(data));
+    },
+
+    // Assignments (personnes assignées par semaine)
+    loadAssignments() {
+        // Vérifier le cache mémoire d'abord
+        if (this._cache.assignments !== null) {
+            return this._cache.assignments;
+        }
+
+        // Essayer Firebase si disponible
+        if (window.kdDb) {
+            window.kdDb.ref('assignments').once('value')
+                .then((snapshot) => {
+                    const data = snapshot.val() || {};
+                    this._cache.assignments = data;
+                    localStorage.setItem('kitchenDuty_assignments', JSON.stringify(data));
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la lecture Firebase assignments', error);
+                });
+        }
+
+        // Retourner immédiatement depuis localStorage
+        const data = JSON.parse(localStorage.getItem('kitchenDuty_assignments') || '{}');
+        this._cache.assignments = data;
+        return data;
+    },
+
+    saveAssignment(isoYear, isoWeek, person) {
+        const weekKey = `${isoYear}-W${isoWeek}`;
+
+        // Mettre à jour le cache
+        if (!this._cache.assignments) {
+            this._cache.assignments = {};
+        }
+        this._cache.assignments[weekKey] = person;
+
+        // Sauvegarder dans localStorage
+        const allAssignments = JSON.parse(localStorage.getItem('kitchenDuty_assignments') || '{}');
+        allAssignments[weekKey] = person;
+        localStorage.setItem('kitchenDuty_assignments', JSON.stringify(allAssignments));
+
+        // Sauvegarder dans Firebase si disponible
+        if (window.kdDb) {
+            window.kdDb.ref(`assignments/${weekKey}`).set(person)
+                .then(() => {
+                    console.log(`Assignment ${weekKey} = ${person} saved to Firebase`);
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la sauvegarde Firebase assignment', error);
+                });
+        }
     }
 };
 
@@ -426,6 +479,9 @@ function render() {
     const weekKey = getWeekKey(currentWeek, currentYear);
     const isMaria = currentPerson === 'Maria';
 
+    // Sauvegarder l'assignment de la semaine courante dans Firebase
+    StorageModule.saveAssignment(currentYear, currentWeek, currentPerson);
+
     // Week number
     document.getElementById('weekNumber').textContent = currentWeek;
 
@@ -499,6 +555,9 @@ function render() {
         const person = getPersonForWeek(week, year);
         const weekKey = getWeekKey(week, year);
         const isDone = history.some(h => h.week === weekKey);
+
+        // Sauvegarder l'assignment pour cette semaine dans Firebase
+        StorageModule.saveAssignment(year, week, person);
 
         const li = document.createElement('li');
         if (i === 0) li.classList.add('current');
@@ -588,6 +647,10 @@ function performSwap(week, year, newPerson) {
             swaps[weekKey] = newPerson;
             swaps[getWeekKey(searchWeek, searchYear)] = currentPerson;
             StorageModule.saveSwaps(swaps);
+
+            // Sauvegarder les assignments après l'échange dans Firebase
+            StorageModule.saveAssignment(year, week, newPerson);
+            StorageModule.saveAssignment(searchYear, searchWeek, currentPerson);
 
             alert(`✅ Échange confirmé !\n\n${currentPerson} ↔ ${newPerson}\n\nS${week}: ${newPerson}\nS${searchWeek}: ${currentPerson}`);
 
