@@ -6,7 +6,7 @@ admin.initializeApp();
 // Configuration
 const CONFIG = {
   members: ["Joya", "Alessandro", "Filippo", "Cédric"],
-  // Maria décalée d'une semaine en arrière par rapport à l'ancienne ref
+  // S47/2025 = Maria, puis toutes les 2 semaines à partir de là
   mariaReferenceWeek: 47,
   mariaReferenceYear: 2025,
   webappURL: "https://cedbo26.github.io/kitchen-duty/",
@@ -62,7 +62,7 @@ function getTuesdayOfISOWeek(week, year) {
 function getWeekDifference(year1, week1, year2, week2) {
   const monday1 = getMondayOfISOWeek(week1, year1);
   const monday2 = getMondayOfISOWeek(week2, year2);
-  const diffDays = (monday2 - monday1) / 86400000;
+  const diffDays = (monday2.getTime() - monday1.getTime()) / 86400000;
   return Math.round(diffDays / 7);
 }
 
@@ -95,10 +95,13 @@ function toICSDateTimeLocal(date) {
 // Qui a la semaine, en tenant compte des swaps
 function getPersonForWeek(week, year, swaps = {}) {
   const weekKey = getWeekKey(week, year);
+
+  // 1) Swap prioritaire
   if (swaps[weekKey]) {
     return swaps[weekKey];
   }
 
+  // 2) Différence en semaines par rapport à la référence Maria (S47/2025)
   const diff = getWeekDifference(
     CONFIG.mariaReferenceYear,
     CONFIG.mariaReferenceWeek,
@@ -106,23 +109,31 @@ function getPersonForWeek(week, year, swaps = {}) {
     week
   );
 
-  // Maria toutes les 2 semaines, avec ref décalée sur S47/2025
-  if (diff % 2 === 0) {
+  // Pour l’horizon utile (à partir de S47/2025) :
+  // diff = 0 → S47/2025 = Maria, diff = 2 → Maria, etc.
+  if (diff >= 0 && diff % 2 === 0) {
     return "Maria";
   }
 
-  // Semaines intermédiaires : rotation colocs
-  const colocRotationIndex = Math.floor(diff / 2);
-  const colocIndex =
-    ((colocRotationIndex % CONFIG.members.length) + CONFIG.members.length) %
-    CONFIG.members.length;
+  // 3) Semaines intermédiaires : rotation colocs
+  // diff impair ≥ 1 : 1,3,5,7,... → 0,1,2,3,... pour la rotation
+  let colocRotationIndex;
+  if (diff >= 0) {
+    colocRotationIndex = Math.floor((diff - 1) / 2);
+  } else {
+    // Si jamais on va avant la référence, on garde une rotation stable
+    colocRotationIndex = Math.floor(diff / 2);
+  }
 
+  const len = CONFIG.members.length;
+  const colocIndex = ((colocRotationIndex % len) + len) % len;
   return CONFIG.members[colocIndex];
 }
 
 // Cloud Function ICS
-exports.kitchenDutyCalendar = functions.region("europe-west1").https.onRequest(
-  async (req, res) => {
+exports.kitchenDutyCalendar = functions
+  .region("europe-west1")
+  .https.onRequest(async (req, res) => {
     try {
       const db = admin.database();
       const swapsSnap = await db.ref("swaps").get();
@@ -172,7 +183,7 @@ exports.kitchenDutyCalendar = functions.region("europe-west1").https.onRequest(
         // Mercredi–samedi (DTEND dimanche exclusif)
         const wednesday = getWednesdayOfISOWeek(week, year);
         const sundayExclusive = new Date(wednesday);
-        sundayExclusive.setDate(wednesday.getDate() + 4); // mer(0)→sam(3), donc dim exclu = +4
+        sundayExclusive.setDate(wednesday.getDate() + 4); // mer → sam (DTEND = dim exclu)
 
         const dtstart = toICSDateAllDay(wednesday);
         const dtend = toICSDateAllDay(sundayExclusive);
@@ -205,7 +216,8 @@ exports.kitchenDutyCalendar = functions.region("europe-west1").https.onRequest(
 
           ics += "BEGIN:VALARM\r\n";
           ics += "ACTION:DISPLAY\r\n";
-          ics += "DESCRIPTION:Rappel KitchenDuty - C'est ton tour cette semaine !\r\n";
+          ics +=
+            "DESCRIPTION:Rappel KitchenDuty - C'est ton tour cette semaine !\r\n";
           ics += `TRIGGER;TZID=Europe/Zurich:${triggerLocal}\r\n`;
           ics += "END:VALARM\r\n";
         }
@@ -224,5 +236,4 @@ exports.kitchenDutyCalendar = functions.region("europe-west1").https.onRequest(
       console.error("ICS generation error", err);
       res.status(500).send("Error generating calendar");
     }
-  }
-);
+  });
