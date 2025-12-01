@@ -1,13 +1,14 @@
 :root {
-    --primary: #2d5a27;
-    --primary-light: #4a8b3c;
-    --secondary: #f4a261;
-    --bg: #fefefe;
-    --bg-card: #ffffff;
-    --text: #1a1a1a;
-    --text-muted: #666;
-    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    --radius: 12px;
+    /* Nouvelle palette sombre avec contraste élevé */
+    --kd-bg: #020617;
+    --kd-card-bg: #0f172a;
+    --kd-primary: #22c55e;
+    --kd-primary-hover: #16a34a;
+    --kd-danger: #f97316;
+    --kd-text: #e5e7eb;
+    --kd-text-muted: #9ca3af;
+    --kd-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --kd-radius: 12px;
 }
 
 * {
@@ -18,9 +19,9 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(135deg, #e8f5e9 0%, #fff8e1 100%);
+    background: var(--kd-bg);
     min-height: 100vh;
-    color: var(--text);
+    color: var(--kd-text);
 }
 
 .container {
@@ -32,31 +33,33 @@ body {
 header {
     text-align: center;
     margin-bottom: 24px;
+    position: relative;
 }
 
 header h1 {
     font-size: 2rem;
-    color: var(--primary);
+    color: var(--kd-primary);
 }
 
 .subtitle {
-    color: var(--text-muted);
+    color: var(--kd-text-muted);
     font-size: 1.1rem;
     margin-top: 4px;
 }
 
 /* Current duty card */
 .current-duty {
-    background: var(--bg-card);
-    border-radius: var(--radius);
+    background: var(--kd-card-bg);
+    border-radius: var(--kd-radius);
     padding: 32px 24px;
     text-align: center;
-    box-shadow: var(--shadow);
+    box-shadow: var(--kd-shadow);
     margin-bottom: 20px;
+    border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 .current-duty .label {
-    color: var(--text-muted);
+    color: var(--kd-text-muted);
     font-size: 0.95rem;
     margin-bottom: 12px;
 }
@@ -64,39 +67,40 @@ header h1 {
 .current-person {
     font-size: 2.2rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--kd-bg);
     padding: 16px;
-    background: linear-gradient(135deg, var(--primary), var(--primary-light));
-    border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--kd-primary), var(--kd-primary-hover));
+    border-radius: var(--kd-radius);
     margin-bottom: 20px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .btn-done {
-    background: var(--primary);
-    color: white;
+    background: var(--kd-primary);
+    color: var(--kd-bg);
     border: none;
     padding: 12px 24px;
     border-radius: 8px;
     font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-done:hover {
-    background: var(--primary-light);
+    background: var(--kd-primary-hover);
     transform: translateY(-2px);
 }
 
 .btn-done.completed {
-    background: #81c784;
+    background: var(--kd-primary-hover);
     pointer-events: none;
 }
 
 .btn-undo {
     background: transparent;
-    color: #e57373;
-    border: 2px solid #e57373;
+    color: var(--kd-danger);
+    border: 2px solid var(--kd-danger);
     padding: 10px 20px;
     border-radius: 8px;
     font-size: 0.9rem;
@@ -106,8 +110,8 @@ header h1 {
 }
 
 .btn-undo:hover {
-    background: #e57373;
-    color: white;
+    background: var(--kd-danger);
+    color: var(--kd-bg);
 }
 
 /* Swap section */
@@ -117,9 +121,9 @@ header h1 {
 }
 
 .btn-swap {
-    background: var(--secondary);
-    color: white;
-    border: none;
+    background: var(--kd-card-bg);
+    color: var(--kd-text);
+    border: 2px solid var(--kd-primary);
     padding: 10px 20px;
     border-radius: 8px;
     font-size: 0.95rem;
@@ -128,17 +132,19 @@ header h1 {
 }
 
 .btn-swap:hover {
-    opacity: 0.9;
+    background: var(--kd-primary);
+    color: var(--kd-bg);
     transform: translateY(-2px);
 }
 
 .swap-modal {
     display: none;
-    background: var(--bg-card);
-    border-radius: var(--radius);
+    background: var(--kd-card-bg);
+    border-radius: var(--kd-radius);
     padding: 20px;
     margin-top: 12px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--kd-shadow);
+    border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 .swap-modal.active {
@@ -152,7 +158,7 @@ header h1 {
 }
 
 .swap-modal p {
-    color: var(--text-muted);
+    color: var(--kd-text-muted);
     margin-bottom: 12px;
 }
 
@@ -165,8 +171,9 @@ header h1 {
 }
 
 .swap-options button {
-    background: #e3f2fd;
-    border: 2px solid #90caf9;
+    background: rgba(34, 197, 94, 0.1);
+    border: 2px solid var(--kd-primary);
+    color: var(--kd-text);
     padding: 10px 16px;
     border-radius: 8px;
     cursor: pointer;
@@ -175,31 +182,39 @@ header h1 {
 }
 
 .swap-options button:hover {
-    background: #bbdefb;
-    border-color: #64b5f6;
+    background: var(--kd-primary);
+    color: var(--kd-bg);
 }
 
 .btn-cancel {
-    background: #eee;
-    border: none;
+    background: rgba(249, 115, 22, 0.1);
+    border: 2px solid var(--kd-danger);
+    color: var(--kd-text);
     padding: 8px 16px;
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+    background: var(--kd-danger);
+    color: var(--kd-bg);
 }
 
 /* Schedule */
 .schedule, .history {
-    background: var(--bg-card);
-    border-radius: var(--radius);
+    background: var(--kd-card-bg);
+    border-radius: var(--kd-radius);
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--kd-shadow);
+    border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 .schedule h2, .history h2 {
     font-size: 1.1rem;
-    color: var(--primary);
+    color: var(--kd-primary);
     margin-bottom: 16px;
 }
 
@@ -212,7 +227,7 @@ header h1 {
     justify-content: space-between;
     align-items: center;
     padding: 12px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.1);
 }
 
 .schedule li:last-child, .history li:last-child {
@@ -220,76 +235,48 @@ header h1 {
 }
 
 .schedule li.current {
-    background: #e8f5e9;
+    background: rgba(34, 197, 94, 0.1);
     margin: 0 -20px;
     padding: 12px 20px;
     border-radius: 8px;
+    border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .week-label {
     font-weight: 500;
+    color: var(--kd-text);
 }
 
 .person-name {
-    color: #ffffff;
+    color: var(--kd-bg);
     font-weight: 600;
-    background: var(--primary);
+    background: var(--kd-primary);
     padding: 4px 12px;
     border-radius: 6px;
 }
 
 .status-done {
-    color: #4caf50;
+    color: var(--kd-primary);
+    font-weight: 700;
 }
 
 .status-pending {
-    color: var(--text-muted);
-}
-
-/* Language switcher */
-.lang-switch {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    display: flex;
-    gap: 4px;
-}
-
-.lang-btn {
-    background: transparent;
-    border: 2px solid var(--primary);
-    color: var(--primary);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.lang-btn.active {
-    background: var(--primary);
-    color: white;
-}
-
-header {
-    text-align: center;
-    margin-bottom: 24px;
-    position: relative;
+    color: var(--kd-text-muted);
 }
 
 /* Checklist */
 .checklist {
-    background: var(--bg-card);
-    border-radius: var(--radius);
+    background: var(--kd-card-bg);
+    border-radius: var(--kd-radius);
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--kd-shadow);
+    border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 .checklist h2 {
     font-size: 1.1rem;
-    color: var(--primary);
+    color: var(--kd-primary);
     margin-bottom: 16px;
 }
 
@@ -299,7 +286,7 @@ header {
 
 .checklist li {
     padding: 10px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.1);
 }
 
 .checklist li:last-child {
@@ -312,25 +299,27 @@ header {
     gap: 12px;
     cursor: pointer;
     font-size: 0.95rem;
+    color: var(--kd-text);
 }
 
 .checklist input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    accent-color: var(--primary);
+    accent-color: var(--kd-primary);
     cursor: pointer;
 }
 
 .checklist input[type="checkbox"]:checked + span {
     text-decoration: line-through;
-    color: var(--text-muted);
+    color: var(--kd-text-muted);
 }
 
 .checklist-progress {
     text-align: center;
     margin-top: 16px;
     font-weight: 600;
-    color: var(--primary);
+    color: var(--kd-primary);
+    font-size: 1.1rem;
 }
 
 /* Export */
@@ -340,9 +329,9 @@ header {
 }
 
 .btn-export {
-    background: white;
-    border: 2px solid var(--primary);
-    color: var(--primary);
+    background: var(--kd-card-bg);
+    border: 2px solid var(--kd-primary);
+    color: var(--kd-text);
     padding: 12px 24px;
     border-radius: 8px;
     font-size: 0.95rem;
@@ -351,26 +340,34 @@ header {
 }
 
 .btn-export:hover {
-    background: var(--primary);
-    color: white;
+    background: var(--kd-primary);
+    color: var(--kd-bg);
+    transform: translateY(-2px);
 }
 
 /* Footer */
 footer {
     text-align: center;
     padding: 20px;
-    color: var(--text-muted);
+    color: var(--kd-text-muted);
 }
 
 .btn-install {
     margin-top: 12px;
-    background: var(--primary);
-    color: white;
+    background: var(--kd-primary);
+    color: var(--kd-bg);
     border: none;
     padding: 10px 20px;
     border-radius: 8px;
     cursor: pointer;
     font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-install:hover {
+    background: var(--kd-primary-hover);
+    transform: translateY(-2px);
 }
 
 /* Responsive */
@@ -378,55 +375,8 @@ footer {
     .current-person {
         font-size: 1.8rem;
     }
-    
+
     .container {
         padding: 12px;
-    }
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #1a1a1a;
-        --bg-card: #2d2d2d;
-        --text: #f0f0f0;
-        --text-muted: #aaa;
-    }
-    
-    body {
-        background: linear-gradient(135deg, #1a2f1a 0%, #2d2a1a 100%);
-    }
-    
-    .current-person {
-        background: linear-gradient(135deg, #2d4a2d, #3d5a3d);
-    }
-    
-    .schedule li.current {
-        background: #2d4a2d;
-    }
-    
-    .swap-options button {
-        background: #3d4a5a;
-        border-color: #5a6a7a;
-        color: var(--text);
-    }
-    
-    .btn-cancel {
-        background: #444;
-        color: var(--text);
-    }
-    
-    .checklist li {
-        border-bottom-color: #444;
-    }
-    
-    .lang-btn {
-        border-color: var(--primary-light);
-        color: var(--primary-light);
-    }
-    
-    .lang-btn.active {
-        background: var(--primary-light);
-        color: white;
     }
 }

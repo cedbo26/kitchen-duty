@@ -1,68 +1,63 @@
 // Configuration
 const CONFIG = {
     members: ['Joya', 'Alessandro', 'Filippo', 'Cédric'],
-    startWeek: 48, // Semaine de départ (actuelle)
-    startYear: 2024
+    mariaReferenceWeek: 48,
+    mariaReferenceYear: 2025
 };
 
-// Translations
-const i18n = {
-    fr: {
-        week: 'Semaine',
-        currentTurn: "C'est le tour de",
-        markDone: 'Marquer comme fait',
-        done: 'Fait !',
-        undo: 'Annuler',
-        checklistTitle: 'Checklist',
-        task_poubelle: 'Poubelle (cartons et compartiments)',
-        task_plaques: 'Nettoyer les plaques',
-        task_table: 'Table',
-        task_evier: 'Évier',
-        task_machine: 'Vider la machine',
-        task_sol: 'Faire le sol',
-        task_sacs: 'Check des sacs poubelle',
-        task_four: 'Four',
-        completed: 'complété',
-        nextWeeks: 'Prochaines semaines',
-        history: 'Historique',
-        addCalendar: 'Ajouter à mon calendrier',
-        swap: 'Proposer un échange',
-        swapWith: 'Échanger avec :',
-        cancel: 'Annuler',
-        noHistory: 'Aucun historique'
+// ==========================================
+// MODULE D'ABSTRACTION POUR LE STOCKAGE
+// ==========================================
+// Ce module centralise tous les accès au localStorage pour faciliter
+// la future migration vers un backend
+
+const StorageModule = {
+    // États des semaines (checklist, statut)
+    loadWeekState(isoYear, isoWeek) {
+        const key = `${isoYear}-W${isoWeek}`;
+        const allStates = JSON.parse(localStorage.getItem('kitchenDuty_weekStates') || '{}');
+        return allStates[key] || { checklist: {}, isDone: false };
     },
-    it: {
-        week: 'Settimana',
-        currentTurn: 'È il turno di',
-        markDone: 'Segna come fatto',
-        done: 'Fatto!',
-        undo: 'Annulla',
-        checklistTitle: 'Checklist',
-        task_poubelle: 'Spazzatura (cartoni e scomparti)',
-        task_plaques: 'Pulire i fornelli',
-        task_table: 'Tavolo',
-        task_evier: 'Lavandino',
-        task_machine: 'Svuotare la lavastoviglie',
-        task_sol: 'Lavare il pavimento',
-        task_sacs: 'Controllare i sacchi',
-        task_four: 'Forno',
-        completed: 'completato',
-        nextWeeks: 'Prossime settimane',
-        history: 'Storico',
-        addCalendar: 'Aggiungi al calendario',
-        swap: 'Proponi uno scambio',
-        swapWith: 'Scambia con:',
-        cancel: 'Annulla',
-        noHistory: 'Nessuno storico'
+
+    saveWeekState(isoYear, isoWeek, data) {
+        const key = `${isoYear}-W${isoWeek}`;
+        const allStates = JSON.parse(localStorage.getItem('kitchenDuty_weekStates') || '{}');
+        allStates[key] = data;
+        localStorage.setItem('kitchenDuty_weekStates', JSON.stringify(allStates));
+    },
+
+    // Historique des tâches complétées
+    loadHistory() {
+        return JSON.parse(localStorage.getItem('kitchenDuty_history') || '[]');
+    },
+
+    saveHistory(data) {
+        localStorage.setItem('kitchenDuty_history', JSON.stringify(data));
+    },
+
+    // Échanges de semaines
+    loadSwaps() {
+        return JSON.parse(localStorage.getItem('kitchenDuty_swaps') || '{}');
+    },
+
+    saveSwaps(data) {
+        localStorage.setItem('kitchenDuty_swaps', JSON.stringify(data));
+    },
+
+    // Checklist (migration de l'ancien format)
+    loadChecklist() {
+        return JSON.parse(localStorage.getItem('kitchenDuty_checklist') || '{}');
+    },
+
+    saveChecklist(data) {
+        localStorage.setItem('kitchenDuty_checklist', JSON.stringify(data));
     }
 };
 
-let currentLang = localStorage.getItem('kitchenDuty_lang') || 'fr';
-
 // State
-let swaps = JSON.parse(localStorage.getItem('kitchenDuty_swaps') || '{}');
-let history = JSON.parse(localStorage.getItem('kitchenDuty_history') || '[]');
-let checklist = JSON.parse(localStorage.getItem('kitchenDuty_checklist') || '{}');
+let swaps = StorageModule.loadSwaps();
+let history = StorageModule.loadHistory();
+let checklist = StorageModule.loadChecklist();
 
 // Utils
 function getWeekNumber(date = new Date()) {
@@ -81,18 +76,44 @@ function getWeekKey(week, year) {
     return `${year}-W${week}`;
 }
 
+/**
+ * Calcule la différence de semaines entre deux dates (année + semaine ISO)
+ */
+function getWeekDifference(year1, week1, year2, week2) {
+    return (year2 - year1) * 52 + (week2 - week1);
+}
+
+/**
+ * Détermine qui est responsable de la semaine donnée
+ * Utilise la logique : semaine ISO 48 de 2025 = Maria
+ * Si diff % 2 === 0 : Maria
+ * Sinon : rotation équitable des colocs
+ */
 function getPersonForWeek(week, year) {
     const weekKey = getWeekKey(week, year);
-    
-    // Check for swaps
+
+    // Vérifier s'il y a un échange
     if (swaps[weekKey]) {
         return swaps[weekKey];
     }
-    
-    // Calculate based on rotation
-    const totalWeeks = (year - CONFIG.startYear) * 52 + week - CONFIG.startWeek;
-    const index = ((totalWeeks % CONFIG.members.length) + CONFIG.members.length) % CONFIG.members.length;
-    return CONFIG.members[index];
+
+    // Calculer la différence avec la semaine de référence de Maria
+    const diff = getWeekDifference(
+        CONFIG.mariaReferenceYear,
+        CONFIG.mariaReferenceWeek,
+        year,
+        week
+    );
+
+    // Si diff % 2 === 0, c'est Maria
+    if (diff % 2 === 0) {
+        return 'Maria';
+    }
+
+    // Sinon, rotation équitable des colocs
+    const colocIndex = Math.floor((diff - 1) / 2) % CONFIG.members.length;
+    const adjustedIndex = (colocIndex + CONFIG.members.length) % CONFIG.members.length;
+    return CONFIG.members[adjustedIndex];
 }
 
 function getMondayOfWeek(week, year) {
@@ -111,26 +132,6 @@ function formatDate(date) {
     return date.toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' });
 }
 
-function applyTranslations() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (i18n[currentLang][key]) {
-            el.textContent = i18n[currentLang][key];
-        }
-    });
-    
-    // Update language buttons
-    document.getElementById('langFr').classList.toggle('active', currentLang === 'fr');
-    document.getElementById('langIt').classList.toggle('active', currentLang === 'it');
-}
-
-function setLanguage(lang) {
-    currentLang = lang;
-    localStorage.setItem('kitchenDuty_lang', lang);
-    applyTranslations();
-    render();
-}
-
 function getWeekChecklistKey(week, year) {
     return `${year}-W${week}`;
 }
@@ -140,12 +141,12 @@ function loadChecklist() {
     const currentYear = getCurrentYear();
     const key = getWeekChecklistKey(currentWeek, currentYear);
     const savedChecklist = checklist[key] || {};
-    
+
     document.querySelectorAll('.checklist input[type="checkbox"]').forEach(cb => {
         const task = cb.getAttribute('data-task');
         cb.checked = savedChecklist[task] || false;
     });
-    
+
     updateChecklistCount();
 }
 
@@ -153,15 +154,15 @@ function saveChecklist() {
     const currentWeek = getWeekNumber();
     const currentYear = getCurrentYear();
     const key = getWeekChecklistKey(currentWeek, currentYear);
-    
+
     const tasks = {};
     document.querySelectorAll('.checklist input[type="checkbox"]').forEach(cb => {
         const task = cb.getAttribute('data-task');
         tasks[task] = cb.checked;
     });
-    
+
     checklist[key] = tasks;
-    localStorage.setItem('kitchenDuty_checklist', JSON.stringify(checklist));
+    StorageModule.saveChecklist(checklist);
     updateChecklistCount();
 }
 
@@ -177,37 +178,66 @@ function render() {
     const currentYear = getCurrentYear();
     const currentPerson = getPersonForWeek(currentWeek, currentYear);
     const weekKey = getWeekKey(currentWeek, currentYear);
-    
+    const isMaria = currentPerson === 'Maria';
+
     // Week number
     document.getElementById('weekNumber').textContent = currentWeek;
-    
+
     // Current person
     document.getElementById('currentPerson').textContent = currentPerson;
-    
-    // Done button state
+
+    // Adapter l'interface selon si c'est Maria ou un coloc
+    const currentDutySection = document.querySelector('.current-duty');
+    const checklistSection = document.querySelector('.checklist');
     const btnDone = document.getElementById('btnDone');
     const btnUndo = document.getElementById('btnUndo');
-    const isDone = history.some(h => h.week === weekKey);
-    if (isDone) {
-        btnDone.innerHTML = `✓ ${i18n[currentLang].done}`;
-        btnDone.classList.add('completed');
-        btnUndo.style.display = 'inline-block';
-    } else {
-        btnDone.innerHTML = `✓ <span data-i18n="markDone">${i18n[currentLang].markDone}</span>`;
-        btnDone.classList.remove('completed');
+    const labelElement = currentDutySection.querySelector('.label');
+
+    if (isMaria) {
+        // Affichage spécial pour Maria
+        labelElement.textContent = 'Semaine de';
+        currentDutySection.querySelector('.current-person').textContent = 'Maria (femme de ménage)';
+
+        // Masquer la checklist et les boutons "Fait"/"Annuler"
+        checklistSection.style.display = 'none';
+        btnDone.style.display = 'none';
         btnUndo.style.display = 'none';
+    } else {
+        // Affichage normal pour les colocs
+        labelElement.textContent = "C'est le tour de";
+
+        // Restaurer la checklist et les boutons
+        checklistSection.style.display = 'block';
+        btnDone.style.display = 'inline-block';
+
+        // Done button state
+        const isDone = history.some(h => h.week === weekKey);
+        if (isDone) {
+            btnDone.innerHTML = '✓ Fait !';
+            btnDone.classList.add('completed');
+            btnUndo.style.display = 'inline-block';
+        } else {
+            btnDone.innerHTML = '✓ Marquer comme fait';
+            btnDone.classList.remove('completed');
+            btnUndo.style.display = 'none';
+        }
     }
-    
-    // Swap options (exclude current person)
+
+    // Swap options (exclure Maria et la personne actuelle)
     const swapOptions = document.getElementById('swapOptions');
     swapOptions.innerHTML = '';
-    CONFIG.members.filter(m => m !== currentPerson).forEach(member => {
+
+    const availableForSwap = isMaria
+        ? CONFIG.members
+        : CONFIG.members.filter(m => m !== currentPerson);
+
+    availableForSwap.forEach(member => {
         const btn = document.createElement('button');
         btn.textContent = member;
         btn.onclick = () => performSwap(currentWeek, currentYear, member);
         swapOptions.appendChild(btn);
     });
-    
+
     // Schedule (next 4 weeks)
     const scheduleList = document.getElementById('scheduleList');
     scheduleList.innerHTML = '';
@@ -218,29 +248,29 @@ function render() {
             week = week - 52;
             year++;
         }
-        
+
         const monday = getMondayOfWeek(week, year);
         const person = getPersonForWeek(week, year);
         const weekKey = getWeekKey(week, year);
         const isDone = history.some(h => h.week === weekKey);
-        
+
         const li = document.createElement('li');
         if (i === 0) li.classList.add('current');
-        
+
         li.innerHTML = `
             <span class="week-label">S${week} · ${formatDate(monday)}</span>
             <span class="person-name">${person} ${isDone ? '<span class="status-done">✓</span>' : ''}</span>
         `;
         scheduleList.appendChild(li);
     }
-    
+
     // History (last 4 entries)
     const historyList = document.getElementById('historyList');
     historyList.innerHTML = '';
     const recentHistory = history.slice(-4).reverse();
-    
+
     if (recentHistory.length === 0) {
-        historyList.innerHTML = `<li style="color: var(--text-muted); text-align: center;">${i18n[currentLang].noHistory}</li>`;
+        historyList.innerHTML = '<li style="color: var(--kd-text-muted); text-align: center;">Aucun historique</li>';
     } else {
         recentHistory.forEach(entry => {
             const li = document.createElement('li');
@@ -259,19 +289,24 @@ function markAsDone() {
     const currentYear = getCurrentYear();
     const weekKey = getWeekKey(currentWeek, currentYear);
     const person = getPersonForWeek(currentWeek, currentYear);
-    
+
+    // Ne pas marquer Maria comme "fait"
+    if (person === 'Maria') {
+        return;
+    }
+
     // Check if already done
     if (history.some(h => h.week === weekKey)) {
         return;
     }
-    
+
     history.push({
         week: weekKey,
         person: person,
         date: new Date().toISOString()
     });
-    
-    localStorage.setItem('kitchenDuty_history', JSON.stringify(history));
+
+    StorageModule.saveHistory(history);
     render();
 }
 
@@ -279,51 +314,51 @@ function undoMarkAsDone() {
     const currentWeek = getWeekNumber();
     const currentYear = getCurrentYear();
     const weekKey = getWeekKey(currentWeek, currentYear);
-    
+
     // Remove from history
     history = history.filter(h => h.week !== weekKey);
-    
-    localStorage.setItem('kitchenDuty_history', JSON.stringify(history));
+
+    StorageModule.saveHistory(history);
     render();
 }
 
 function performSwap(week, year, newPerson) {
     const weekKey = getWeekKey(week, year);
     const currentPerson = getPersonForWeek(week, year);
-    
+
     // Find next week where newPerson is scheduled
     let searchWeek = week + 1;
     let searchYear = year;
-    
+
     for (let i = 0; i < 8; i++) { // Search max 8 weeks
         if (searchWeek > 52) {
             searchWeek = 1;
             searchYear++;
         }
-        
+
         const scheduledPerson = getPersonForWeek(searchWeek, searchYear);
         if (scheduledPerson === newPerson) {
             // Perform the swap
             swaps[weekKey] = newPerson;
             swaps[getWeekKey(searchWeek, searchYear)] = currentPerson;
-            localStorage.setItem('kitchenDuty_swaps', JSON.stringify(swaps));
-            
+            StorageModule.saveSwaps(swaps);
+
             alert(`✅ Échange confirmé !\n\n${currentPerson} ↔ ${newPerson}\n\nS${week}: ${newPerson}\nS${searchWeek}: ${currentPerson}`);
-            
+
             document.getElementById('swapModal').classList.remove('active');
             render();
             return;
         }
         searchWeek++;
     }
-    
+
     alert('Impossible de trouver une semaine pour l\'échange');
 }
 
 function generateICS() {
     const currentWeek = getWeekNumber();
     const currentYear = getCurrentYear();
-    
+
     let icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//KitchenDuty//Coloc//FR
@@ -340,28 +375,32 @@ X-WR-CALNAME:🍳 KitchenDuty
             week = week - 52;
             year++;
         }
-        
+
         const person = getPersonForWeek(week, year);
         const monday = getMondayOfWeek(week, year);
         const sunday = new Date(monday);
         sunday.setDate(sunday.getDate() + 6);
-        
+
         const formatICSDate = (d) => {
             return d.toISOString().split('T')[0].replace(/-/g, '');
         };
-        
+
+        const description = person === 'Maria'
+            ? 'Semaine de Maria (femme de ménage)'
+            : `C'est le tour de ${person} pour nettoyer la cuisine cette semaine !`;
+
         icsContent += `BEGIN:VEVENT
 DTSTART;VALUE=DATE:${formatICSDate(monday)}
 DTEND;VALUE=DATE:${formatICSDate(sunday)}
 SUMMARY:🍳 Cuisine: ${person}
-DESCRIPTION:C'est le tour de ${person} pour nettoyer la cuisine cette semaine !
+DESCRIPTION:${description}
 UID:kitchenduty-${year}-${week}@coloc
 END:VEVENT
 `;
     }
-    
+
     icsContent += 'END:VCALENDAR';
-    
+
     // Download
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const link = document.createElement('a');
@@ -384,10 +423,6 @@ document.getElementById('btnCancelSwap').addEventListener('click', () => {
 });
 
 document.getElementById('btnExport').addEventListener('click', generateICS);
-
-// Language switch
-document.getElementById('langFr').addEventListener('click', () => setLanguage('fr'));
-document.getElementById('langIt').addEventListener('click', () => setLanguage('it'));
 
 // Checklist
 document.querySelectorAll('.checklist input[type="checkbox"]').forEach(cb => {
@@ -419,6 +454,5 @@ if ('serviceWorker' in navigator) {
 }
 
 // Initial render
-applyTranslations();
 render();
 loadChecklist();
