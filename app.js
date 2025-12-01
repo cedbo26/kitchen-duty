@@ -284,17 +284,28 @@ function getWeekKey(week, year) {
 }
 
 /**
- * Calcule la différence de semaines entre deux dates (année + semaine ISO)
+ * Calcule la différence en semaines ISO entre deux semaines (année + numéro de semaine)
+ * Utilise les dates réelles pour un calcul précis
  */
 function getWeekDifference(year1, week1, year2, week2) {
-    return (year2 - year1) * 52 + (week2 - week1);
+    // Obtenir le lundi de chaque semaine ISO
+    const monday1 = getMondayOfWeek(week1, year1);
+    const monday2 = getMondayOfWeek(week2, year2);
+
+    // Calculer la différence en jours, puis convertir en semaines
+    const diffTime = monday2.getTime() - monday1.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    const diffWeeks = Math.round(diffDays / 7);
+
+    return diffWeeks;
 }
 
 /**
  * Détermine qui est responsable de la semaine donnée
- * Utilise la logique : semaine ISO 48 de 2025 = Maria
- * Si diff % 2 === 0 : Maria
- * Sinon : rotation équitable des colocs
+ * Règle métier :
+ * - Semaine ISO 48 de 2025 = Maria (référence)
+ * - Si diff % 2 === 0 : Maria (toutes les 2 semaines)
+ * - Si diff % 2 === 1 : rotation des colocs
  */
 function getPersonForWeek(week, year) {
     const weekKey = getWeekKey(week, year);
@@ -312,13 +323,15 @@ function getPersonForWeek(week, year) {
         week
     );
 
-    // Si diff % 2 === 0, c'est Maria
+    // Si diff est pair (0, 2, 4, ...) → c'est Maria
     if (diff % 2 === 0) {
         return 'Maria';
     }
 
-    // Sinon, rotation équitable des colocs
-    const colocIndex = Math.floor((diff - 1) / 2) % CONFIG.members.length;
+    // Si diff est impair (1, 3, 5, ...) → rotation des colocs
+    // On divise par 2 pour obtenir l'index de rotation parmi les semaines de colocs
+    const colocRotationIndex = Math.floor(diff / 2);
+    const colocIndex = colocRotationIndex % CONFIG.members.length;
     const adjustedIndex = (colocIndex + CONFIG.members.length) % CONFIG.members.length;
     return CONFIG.members[adjustedIndex];
 }
@@ -337,6 +350,32 @@ function getMondayOfWeek(week, year) {
 
 function formatDate(date) {
     return date.toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' });
+}
+
+/**
+ * Obtient la plage de dates (lundi-dimanche) d'une semaine ISO
+ * et la formate sous forme de chaîne lisible
+ */
+function getWeekDateRange(week, year) {
+    const monday = getMondayOfWeek(week, year);
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+
+    // Formater les dates
+    const startDay = monday.getDate();
+    const endDay = sunday.getDate();
+
+    // Gérer le cas où la semaine chevauche deux mois
+    const startMonth = monday.toLocaleDateString('fr-CH', { month: 'short' });
+    const endMonth = sunday.toLocaleDateString('fr-CH', { month: 'short' });
+
+    if (startMonth === endMonth) {
+        // Même mois : "1–7 déc."
+        return `${startDay}–${endDay} ${startMonth}`;
+    } else {
+        // Mois différents : "30 déc.–5 janv."
+        return `${startDay} ${startMonth}–${endDay} ${endMonth}`;
+    }
 }
 
 function getWeekChecklistKey(week, year) {
@@ -456,7 +495,7 @@ function render() {
             year++;
         }
 
-        const monday = getMondayOfWeek(week, year);
+        const dateRange = getWeekDateRange(week, year);
         const person = getPersonForWeek(week, year);
         const weekKey = getWeekKey(week, year);
         const isDone = history.some(h => h.week === weekKey);
@@ -465,7 +504,7 @@ function render() {
         if (i === 0) li.classList.add('current');
 
         li.innerHTML = `
-            <span class="week-label">S${week} · ${formatDate(monday)}</span>
+            <span class="week-label">S${week} · ${dateRange}</span>
             <span class="person-name">${person} ${isDone ? '<span class="status-done">✓</span>' : ''}</span>
         `;
         scheduleList.appendChild(li);
