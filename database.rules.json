@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "swaps": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "history": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "weeks": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}
