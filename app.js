@@ -8,43 +8,250 @@ const CONFIG = {
 // ==========================================
 // MODULE D'ABSTRACTION POUR LE STOCKAGE
 // ==========================================
-// Ce module centralise tous les accès au localStorage pour faciliter
-// la future migration vers un backend
+// Ce module centralise tous les accès au stockage (Firebase + localStorage fallback)
 
 const StorageModule = {
+    // Cache mémoire pour éviter les lectures redondantes
+    _cache: {
+        weekStates: {},
+        history: null,
+        swaps: null,
+        checklist: null
+    },
+
+    // Flag pour éviter les boucles infinies lors des listeners
+    _isUpdatingFromFirebase: false,
+
+    // Callback appelé quand les données changent (pour rafraîchir l'UI)
+    _onDataChange: null,
+
+    // Initialiser les listeners Firebase
+    init(onDataChangeCallback) {
+        this._onDataChange = onDataChangeCallback;
+
+        if (!window.kdDb) {
+            console.log('Firebase non disponible, utilisation de localStorage uniquement');
+            return;
+        }
+
+        // Listener sur l'historique
+        window.kdDb.ref('history').on('value', (snapshot) => {
+            if (this._isUpdatingFromFirebase) return;
+
+            const data = snapshot.val() || [];
+            this._cache.history = data;
+
+            // Sync avec localStorage
+            localStorage.setItem('kitchenDuty_history', JSON.stringify(data));
+
+            if (this._onDataChange) {
+                this._onDataChange('history');
+            }
+        });
+
+        // Listener sur les swaps
+        window.kdDb.ref('swaps').on('value', (snapshot) => {
+            if (this._isUpdatingFromFirebase) return;
+
+            const data = snapshot.val() || {};
+            this._cache.swaps = data;
+
+            // Sync avec localStorage
+            localStorage.setItem('kitchenDuty_swaps', JSON.stringify(data));
+
+            if (this._onDataChange) {
+                this._onDataChange('swaps');
+            }
+        });
+
+        // Listener sur la semaine courante (sera mis à jour dynamiquement)
+        this._setupCurrentWeekListener();
+    },
+
+    _setupCurrentWeekListener() {
+        const currentWeek = getWeekNumber();
+        const currentYear = getCurrentYear();
+        const key = `${currentYear}-W${currentWeek}`;
+
+        if (!window.kdDb) return;
+
+        window.kdDb.ref(`weeks/${key}`).on('value', (snapshot) => {
+            if (this._isUpdatingFromFirebase) return;
+
+            const data = snapshot.val() || { checklist: {}, isDone: false };
+            this._cache.weekStates[key] = data;
+
+            // Sync avec localStorage
+            const allStates = JSON.parse(localStorage.getItem('kitchenDuty_weekStates') || '{}');
+            allStates[key] = data;
+            localStorage.setItem('kitchenDuty_weekStates', JSON.stringify(allStates));
+
+            if (this._onDataChange) {
+                this._onDataChange('currentWeek');
+            }
+        });
+    },
+
     // États des semaines (checklist, statut)
     loadWeekState(isoYear, isoWeek) {
         const key = `${isoYear}-W${isoWeek}`;
+
+        // Vérifier le cache mémoire d'abord
+        if (this._cache.weekStates[key]) {
+            return this._cache.weekStates[key];
+        }
+
+        // Essayer Firebase si disponible
+        if (window.kdDb) {
+            // Lecture depuis Firebase (opération asynchrone mais on retourne immédiatement le cache localStorage)
+            window.kdDb.ref(`weeks/${key}`).once('value')
+                .then((snapshot) => {
+                    const data = snapshot.val() || { checklist: {}, isDone: false };
+                    this._cache.weekStates[key] = data;
+
+                    // Sync avec localStorage
+                    const allStates = JSON.parse(localStorage.getItem('kitchenDuty_weekStates') || '{}');
+                    allStates[key] = data;
+                    localStorage.setItem('kitchenDuty_weekStates', JSON.stringify(allStates));
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la lecture Firebase, utilisation de localStorage', error);
+                });
+        }
+
+        // Retourner immédiatement depuis localStorage
         const allStates = JSON.parse(localStorage.getItem('kitchenDuty_weekStates') || '{}');
-        return allStates[key] || { checklist: {}, isDone: false };
+        const state = allStates[key] || { checklist: {}, isDone: false };
+        this._cache.weekStates[key] = state;
+        return state;
     },
 
     saveWeekState(isoYear, isoWeek, data) {
         const key = `${isoYear}-W${isoWeek}`;
+
+        // Mettre à jour le cache
+        this._cache.weekStates[key] = data;
+
+        // Sauvegarder dans localStorage
         const allStates = JSON.parse(localStorage.getItem('kitchenDuty_weekStates') || '{}');
         allStates[key] = data;
         localStorage.setItem('kitchenDuty_weekStates', JSON.stringify(allStates));
+
+        // Sauvegarder dans Firebase si disponible
+        if (window.kdDb) {
+            this._isUpdatingFromFirebase = true;
+            window.kdDb.ref(`weeks/${key}`).set(data)
+                .then(() => {
+                    console.log(`Week state ${key} saved to Firebase`);
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la sauvegarde Firebase, données conservées en local', error);
+                })
+                .finally(() => {
+                    this._isUpdatingFromFirebase = false;
+                });
+        }
     },
 
     // Historique des tâches complétées
     loadHistory() {
-        return JSON.parse(localStorage.getItem('kitchenDuty_history') || '[]');
+        // Vérifier le cache mémoire d'abord
+        if (this._cache.history !== null) {
+            return this._cache.history;
+        }
+
+        // Essayer Firebase si disponible
+        if (window.kdDb) {
+            window.kdDb.ref('history').once('value')
+                .then((snapshot) => {
+                    const data = snapshot.val() || [];
+                    this._cache.history = data;
+                    localStorage.setItem('kitchenDuty_history', JSON.stringify(data));
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la lecture Firebase history', error);
+                });
+        }
+
+        // Retourner immédiatement depuis localStorage
+        const data = JSON.parse(localStorage.getItem('kitchenDuty_history') || '[]');
+        this._cache.history = data;
+        return data;
     },
 
     saveHistory(data) {
+        // Mettre à jour le cache
+        this._cache.history = data;
+
+        // Sauvegarder dans localStorage
         localStorage.setItem('kitchenDuty_history', JSON.stringify(data));
+
+        // Sauvegarder dans Firebase si disponible
+        if (window.kdDb) {
+            this._isUpdatingFromFirebase = true;
+            window.kdDb.ref('history').set(data)
+                .then(() => {
+                    console.log('History saved to Firebase');
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la sauvegarde Firebase history', error);
+                })
+                .finally(() => {
+                    this._isUpdatingFromFirebase = false;
+                });
+        }
     },
 
     // Échanges de semaines
     loadSwaps() {
-        return JSON.parse(localStorage.getItem('kitchenDuty_swaps') || '{}');
+        // Vérifier le cache mémoire d'abord
+        if (this._cache.swaps !== null) {
+            return this._cache.swaps;
+        }
+
+        // Essayer Firebase si disponible
+        if (window.kdDb) {
+            window.kdDb.ref('swaps').once('value')
+                .then((snapshot) => {
+                    const data = snapshot.val() || {};
+                    this._cache.swaps = data;
+                    localStorage.setItem('kitchenDuty_swaps', JSON.stringify(data));
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la lecture Firebase swaps', error);
+                });
+        }
+
+        // Retourner immédiatement depuis localStorage
+        const data = JSON.parse(localStorage.getItem('kitchenDuty_swaps') || '{}');
+        this._cache.swaps = data;
+        return data;
     },
 
     saveSwaps(data) {
+        // Mettre à jour le cache
+        this._cache.swaps = data;
+
+        // Sauvegarder dans localStorage
         localStorage.setItem('kitchenDuty_swaps', JSON.stringify(data));
+
+        // Sauvegarder dans Firebase si disponible
+        if (window.kdDb) {
+            this._isUpdatingFromFirebase = true;
+            window.kdDb.ref('swaps').set(data)
+                .then(() => {
+                    console.log('Swaps saved to Firebase');
+                })
+                .catch((error) => {
+                    console.warn('Erreur lors de la sauvegarde Firebase swaps', error);
+                })
+                .finally(() => {
+                    this._isUpdatingFromFirebase = false;
+                });
+        }
     },
 
-    // Checklist (migration de l'ancien format)
+    // Checklist (migration de l'ancien format - conservé pour compatibilité)
     loadChecklist() {
         return JSON.parse(localStorage.getItem('kitchenDuty_checklist') || '{}');
     },
@@ -452,6 +659,27 @@ if ('serviceWorker' in navigator) {
         .then(() => console.log('SW registered'))
         .catch(err => console.log('SW registration failed:', err));
 }
+
+// Callback pour la synchronisation temps réel Firebase
+function onFirebaseDataChange(dataType) {
+    console.log(`Firebase data changed: ${dataType}`);
+
+    // Recharger les données depuis le cache/localStorage
+    if (dataType === 'history') {
+        history = StorageModule.loadHistory();
+    } else if (dataType === 'swaps') {
+        swaps = StorageModule.loadSwaps();
+    } else if (dataType === 'currentWeek') {
+        // Recharger la checklist de la semaine courante
+        loadChecklist();
+    }
+
+    // Rafraîchir l'UI
+    render();
+}
+
+// Initialiser Firebase listeners
+StorageModule.init(onFirebaseDataChange);
 
 // Initial render
 render();

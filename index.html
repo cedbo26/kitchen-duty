@@ -76,6 +76,34 @@
         </footer>
     </div>
 
+    <!-- Firebase CDN (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <!-- Firebase Initialization -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDV6kbHMSlfPN2DVMrZip1i8wr9kpj5BYQ",
+            authDomain: "kitchen-duty-75864.firebaseapp.com",
+            databaseURL: "https://kitchen-duty-75864-default-rtdb.firebaseio.com",
+            projectId: "kitchen-duty-75864",
+            storageBucket: "kitchen-duty-75864.firebasestorage.app",
+            messagingSenderId: "419676527246",
+            appId: "1:419676527246:web:f98693d276ae868a1747df",
+            measurementId: "G-G70G8F8K89"
+        };
+
+        try {
+            firebase.initializeApp(firebaseConfig);
+            const kdDb = firebase.database();
+            window.kdDb = kdDb;
+            console.log('Firebase initialized successfully');
+        } catch (error) {
+            console.warn('Firebase initialization failed, falling back to localStorage only', error);
+            window.kdDb = null;
+        }
+    </script>
+
     <script src="app.js"></script>
 </body>
 </html>
