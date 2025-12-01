@@ -1,317 +1,228 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
 
-// Initialiser Firebase Admin
 admin.initializeApp();
 
 // Configuration
 const CONFIG = {
-    members: ['Joya', 'Alessandro', 'Filippo', 'Cédric'],
-    // Nouvelle référence : semaine 47 de 2025 = Maria (décalage d'une semaine en arrière)
-    mariaReferenceWeek: 47,
-    mariaReferenceYear: 2025,
-    webappURL: 'https://cedbo26.github.io/kitchen-duty/'
+  members: ["Joya", "Alessandro", "Filippo", "Cédric"],
+  // Maria décalée d'une semaine en arrière par rapport à l'ancienne ref
+  mariaReferenceWeek: 47,
+  mariaReferenceYear: 2025,
+  webappURL: "https://cedbo26.github.io/kitchen-duty/",
 };
 
-/**
- * Obtient le numéro de semaine ISO d'une date
- */
-function getISOWeek(date) {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-    return { week: weekNum, year: d.getUTCFullYear() };
-}
-
-/**
- * Obtient le lundi d'une semaine ISO donnée
- */
+// Helpers semaines ISO
 function getMondayOfISOWeek(week, year) {
-    const simple = new Date(year, 0, 1 + (week - 1) * 7);
-    const dow = simple.getDay();
-    const monday = new Date(simple);
-    if (dow <= 4) {
-        monday.setDate(simple.getDate() - simple.getDay() + 1);
-    } else {
-        monday.setDate(simple.getDate() + 8 - simple.getDay());
-    }
-    return monday;
+  const simple = new Date(year, 0, 1 + (week - 1) * 7);
+  const dow = simple.getDay(); // 0 = dim, 1 = lun
+  const monday = new Date(simple);
+  if (dow <= 4) {
+    monday.setDate(simple.getDate() - dow + 1);
+  } else {
+    monday.setDate(simple.getDate() + 8 - dow);
+  }
+  monday.setHours(0, 0, 0, 0);
+  return monday;
 }
 
-/**
- * Obtient le mercredi d'une semaine ISO donnée
- */
-function getWednesdayOfISOWeek(week, year) {
-    const monday = getMondayOfISOWeek(week, year);
-    const wednesday = new Date(monday);
-    wednesday.setDate(monday.getDate() + 2); // Lundi + 2 jours = Mercredi
-    return wednesday;
-}
-
-/**
- * Obtient le mardi d'une semaine ISO donnée
- */
-function getTuesdayOfISOWeek(week, year) {
-    const monday = getMondayOfISOWeek(week, year);
-    const tuesday = new Date(monday);
-    tuesday.setDate(monday.getDate() + 1); // Lundi + 1 jour = Mardi
-    return tuesday;
-}
-
-/**
- * Calcule la différence en semaines ISO entre deux semaines
- */
-function getWeekDifference(year1, week1, year2, week2) {
-    const monday1 = getMondayOfISOWeek(week1, year1);
-    const monday2 = getMondayOfISOWeek(week2, year2);
-    const diffTime = monday2.getTime() - monday1.getTime();
-    const diffDays = diffTime / (1000 * 60 * 60 * 24);
-    const diffWeeks = Math.round(diffDays / 7);
-    return diffWeeks;
-}
-
-/**
- * Détermine qui est responsable d'une semaine donnée
- * Nouvelle logique : Maria référencée sur semaine 47/2025 (décalage d'une semaine)
- */
-function getPersonForWeek(week, year, swaps = {}) {
-    const weekKey = `${year}-W${week}`;
-
-    // Vérifier s'il y a un échange
-    if (swaps[weekKey]) {
-        return swaps[weekKey];
-    }
-
-    // Calculer la différence avec la semaine de référence de Maria
-    const diff = getWeekDifference(
-        CONFIG.mariaReferenceYear,
-        CONFIG.mariaReferenceWeek,
-        year,
-        week
+function getISOWeek(date) {
+  const tmp = new Date(date.getTime());
+  tmp.setHours(0, 0, 0, 0);
+  tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
+  const week1 = new Date(tmp.getFullYear(), 0, 4);
+  const weekNo =
+    1 +
+    Math.round(
+      ((tmp.getTime() - week1.getTime()) / 86400000 -
+        3 +
+        ((week1.getDay() + 6) % 7)) /
+        7
     );
-
-    // Si diff est pair → Maria (47, 49, 51, 1, 3, etc.)
-    if (diff % 2 === 0) {
-        return 'Maria';
-    }
-
-    // Si diff est impair → rotation des colocs
-    const colocRotationIndex = Math.floor(diff / 2);
-    const colocIndex = colocRotationIndex % CONFIG.members.length;
-    const adjustedIndex = (colocIndex + CONFIG.members.length) % CONFIG.members.length;
-    return CONFIG.members[adjustedIndex];
+  return { year: tmp.getFullYear(), week: weekNo };
 }
 
-/**
- * Formate une date en format ICS all-day (YYYYMMDD)
- */
-function toICSDateAllDay(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}${month}${day}`;
+function getWednesdayOfISOWeek(week, year) {
+  const monday = getMondayOfISOWeek(week, year);
+  const wednesday = new Date(monday);
+  wednesday.setDate(monday.getDate() + 2); // lun + 2 = mer
+  wednesday.setHours(0, 0, 0, 0);
+  return wednesday;
 }
 
-/**
- * Formate une date en format ICS avec heure locale (YYYYMMDDTHHMMSS)
- */
-function toICSDateTimeLocal(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${year}${month}${day}T${hours}${minutes}${seconds}`;
+function getTuesdayOfISOWeek(week, year) {
+  const monday = getMondayOfISOWeek(week, year);
+  const tuesday = new Date(monday);
+  tuesday.setDate(monday.getDate() + 1); // lun + 1 = mar
+  tuesday.setHours(0, 0, 0, 0);
+  return tuesday;
 }
 
-/**
- * Formate une date en format ICS (YYYYMMDDTHHMMSSZ)
- */
+// Diff de semaines entre (year1, week1) et (year2, week2)
+function getWeekDifference(year1, week1, year2, week2) {
+  const monday1 = getMondayOfISOWeek(week1, year1);
+  const monday2 = getMondayOfISOWeek(week2, year2);
+  const diffDays = (monday2 - monday1) / 86400000;
+  return Math.round(diffDays / 7);
+}
+
+function getWeekKey(week, year) {
+  return `${year}-W${week}`;
+}
+
+// Format ICS
 function toICSDateUTC(date) {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const hours = String(date.getUTCHours()).padStart(2, '0');
-    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-    return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+  return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
 
-/**
- * Génère un UID unique pour un événement
- */
-function generateUID(year, week) {
-    return `kitchenduty-${year}-W${week}@kitchen-duty-75864.web.app`;
+function toICSDateAllDay(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${m}${d}`;
 }
 
-/**
- * Génère le contenu ICS complet
- */
-async function generateICSContent() {
-    // Récupérer les swaps depuis Firebase
-    const db = admin.database();
-    const swapsSnapshot = await db.ref('swaps').once('value');
-    const swaps = swapsSnapshot.val() || {};
+function toICSDateTimeLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${y}${m}${d}T${hh}${mm}${ss}`;
+}
 
-    // Date actuelle
-    const now = new Date();
-    const currentISOWeek = getISOWeek(now);
+// Qui a la semaine, en tenant compte des swaps
+function getPersonForWeek(week, year, swaps = {}) {
+  const weekKey = getWeekKey(week, year);
+  if (swaps[weekKey]) {
+    return swaps[weekKey];
+  }
 
-    // Période : aujourd'hui + 3 mois (environ 13 semaines)
-    const endDate = new Date(now);
-    endDate.setMonth(endDate.getMonth() + 3);
+  const diff = getWeekDifference(
+    CONFIG.mariaReferenceYear,
+    CONFIG.mariaReferenceWeek,
+    year,
+    week
+  );
 
-    // En-tête ICS avec timezone Europe/Zurich
-    let icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//KitchenDuty//Firebase Functions//FR
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-X-WR-CALNAME:🍳 KitchenDuty
-X-WR-TIMEZONE:Europe/Zurich
-X-WR-CALDESC:Planning de nettoyage cuisine - Colocation
-BEGIN:VTIMEZONE
-TZID:Europe/Zurich
-BEGIN:DAYLIGHT
-TZOFFSETFROM:+0100
-TZOFFSETTO:+0200
-TZNAME:CEST
-DTSTART:19700329T020000
-RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
-END:DAYLIGHT
-BEGIN:STANDARD
-TZOFFSETFROM:+0200
-TZOFFSETTO:+0100
-TZNAME:CET
-DTSTART:19701025T030000
-RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
-END:STANDARD
-END:VTIMEZONE
-`;
+  // Maria toutes les 2 semaines, avec ref décalée sur S47/2025
+  if (diff % 2 === 0) {
+    return "Maria";
+  }
 
-    // Générer les événements pour les prochaines semaines
-    let currentWeek = currentISOWeek.week;
-    let currentYear = currentISOWeek.year;
-    const endISOWeek = getISOWeek(endDate);
+  // Semaines intermédiaires : rotation colocs
+  const colocRotationIndex = Math.floor(diff / 2);
+  const colocIndex =
+    ((colocRotationIndex % CONFIG.members.length) + CONFIG.members.length) %
+    CONFIG.members.length;
 
-    // Logs pour vérification
-    console.log('=== Génération ICS - Exemples de semaines ===');
+  return CONFIG.members[colocIndex];
+}
 
-    while (currentYear < endISOWeek.year ||
-           (currentYear === endISOWeek.year && currentWeek <= endISOWeek.week)) {
+// Cloud Function ICS
+exports.kitchenDutyCalendar = functions.region("europe-west1").https.onRequest(
+  async (req, res) => {
+    try {
+      const db = admin.database();
+      const swapsSnap = await db.ref("swaps").get();
+      const swaps = swapsSnap.exists() ? swapsSnap.val() : {};
 
-        const person = getPersonForWeek(currentWeek, currentYear, swaps);
-        const isMaria = person === 'Maria';
-        const weekKey = `${currentYear}-W${currentWeek}`;
+      const now = new Date();
+      const end = new Date();
+      end.setMonth(end.getMonth() + 3);
 
-        // Événement all-day de mercredi à samedi inclus
-        const wednesday = getWednesdayOfISOWeek(currentWeek, currentYear);
-        const sunday = new Date(wednesday);
-        sunday.setDate(wednesday.getDate() + 4); // Mercredi + 4 jours = Dimanche (exclusif)
+      // Normaliser sur le lundi de la semaine en cours
+      const isoNow = getISOWeek(now);
+      let monday = getMondayOfISOWeek(isoNow.week, isoNow.year);
+
+      let ics = "";
+      ics += "BEGIN:VCALENDAR\r\n";
+      ics += "VERSION:2.0\r\n";
+      ics += "PRODID:-//KitchenDuty//Firebase Functions//FR\r\n";
+      ics += "CALSCALE:GREGORIAN\r\n";
+      ics += "METHOD:PUBLISH\r\n";
+      ics += "X-WR-CALNAME:🍳 KitchenDuty\r\n";
+      ics += "X-WR-TIMEZONE:Europe/Zurich\r\n";
+      ics += "X-WR-CALDESC:Planning de nettoyage cuisine - Colocation\r\n";
+
+      // VTIMEZONE simplifié Europe/Zurich
+      ics += "BEGIN:VTIMEZONE\r\n";
+      ics += "TZID:Europe/Zurich\r\n";
+      ics += "BEGIN:STANDARD\r\n";
+      ics += "DTSTART:19701025T030000\r\n";
+      ics += "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU\r\n";
+      ics += "TZOFFSETFROM:+0200\r\n";
+      ics += "TZOFFSETTO:+0100\r\n";
+      ics += "END:STANDARD\r\n";
+      ics += "BEGIN:DAYLIGHT\r\n";
+      ics += "DTSTART:19700329T020000\r\n";
+      ics += "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU\r\n";
+      ics += "TZOFFSETFROM:+0100\r\n";
+      ics += "TZOFFSETTO:+0200\r\n";
+      ics += "END:DAYLIGHT\r\n";
+      ics += "END:VTIMEZONE\r\n";
+
+      while (monday <= end) {
+        const { year, week } = getISOWeek(monday);
+        const weekKey = getWeekKey(week, year);
+        const person = getPersonForWeek(week, year, swaps);
+        const isMaria = person === "Maria";
+
+        // Mercredi–samedi (DTEND dimanche exclusif)
+        const wednesday = getWednesdayOfISOWeek(week, year);
+        const sundayExclusive = new Date(wednesday);
+        sundayExclusive.setDate(wednesday.getDate() + 4); // mer(0)→sam(3), donc dim exclu = +4
 
         const dtstart = toICSDateAllDay(wednesday);
-        const dtend = toICSDateAllDay(sunday);
-
-        // Mardi 20h pour le VALARM (uniquement pour les colocs)
-        const tuesday = getTuesdayOfISOWeek(currentWeek, currentYear);
-        tuesday.setHours(20, 0, 0, 0);
-        const tuesdayTrigger = toICSDateTimeLocal(tuesday);
-
-        // Description avec URL
-        const description = isMaria
-            ? `Semaine de Maria (femme de ménage)\\n\\nWebapp: ${CONFIG.webappURL}`
-            : `C'est le tour de ${person} pour nettoyer la cuisine cette semaine !\\n\\nWebapp: ${CONFIG.webappURL}`;
+        const dtend = toICSDateAllDay(sundayExclusive);
 
         const summary = `Kitchen : ${person}`;
 
-        // Logs pour les 4 premières semaines
-        if (currentWeek <= currentISOWeek.week + 3) {
-            console.log(`${weekKey} | ${person} | Maria=${isMaria} | DTSTART=${dtstart} | DTEND=${dtend} | VALARM=${!isMaria}`);
-        }
+        const description = isMaria
+          ? `Semaine de Maria (femme de ménage)\\n\\nWebapp: ${CONFIG.webappURL}`
+          : `C'est le tour de ${person} pour nettoyer la cuisine cette semaine !\\n\\nWebapp: ${CONFIG.webappURL}`;
 
-        // Ajouter l'événement au format ICS
-        icsContent += `BEGIN:VEVENT
-UID:${generateUID(currentYear, currentWeek)}
-DTSTAMP:${toICSDateUTC(now)}
-DTSTART;VALUE=DATE:${dtstart}
-DTEND;VALUE=DATE:${dtend}
-SUMMARY:${summary}
-DESCRIPTION:${description}
-URL:${CONFIG.webappURL}
-STATUS:CONFIRMED
-SEQUENCE:0
-TRANSP:TRANSPARENT
-`;
+        const nowStamp = toICSDateUTC(now);
 
-        // Ajouter VALARM uniquement pour les colocs (pas pour Maria)
+        ics += "BEGIN:VEVENT\r\n";
+        ics += `UID:kitchenduty-${weekKey}@kitchen-duty-75864.web.app\r\n`;
+        ics += `DTSTAMP:${nowStamp}\r\n`;
+        ics += `DTSTART;VALUE=DATE:${dtstart}\r\n`;
+        ics += `DTEND;VALUE=DATE:${dtend}\r\n`;
+        ics += `SUMMARY:${summary}\r\n`;
+        ics += `DESCRIPTION:${description}\r\n`;
+        ics += `URL:${CONFIG.webappURL}\r\n`;
+        ics += "STATUS:CONFIRMED\r\n";
+        ics += "SEQUENCE:0\r\n";
+        ics += "TRANSP:TRANSPARENT\r\n";
+
+        // VALARM mardi 20:00 Europe/Zurich uniquement pour les colocs
         if (!isMaria) {
-            icsContent += `BEGIN:VALARM
-ACTION:DISPLAY
-DESCRIPTION:Rappel KitchenDuty - C'est ton tour cette semaine !
-TRIGGER;TZID=Europe/Zurich:${tuesdayTrigger}
-END:VALARM
-`;
+          const tuesday = getTuesdayOfISOWeek(week, year);
+          tuesday.setHours(20, 0, 0, 0);
+          const triggerLocal = toICSDateTimeLocal(tuesday);
+
+          ics += "BEGIN:VALARM\r\n";
+          ics += "ACTION:DISPLAY\r\n";
+          ics += "DESCRIPTION:Rappel KitchenDuty - C'est ton tour cette semaine !\r\n";
+          ics += `TRIGGER;TZID=Europe/Zurich:${triggerLocal}\r\n`;
+          ics += "END:VALARM\r\n";
         }
 
-        icsContent += `END:VEVENT
-`;
+        ics += "END:VEVENT\r\n";
 
-        // Passer à la semaine suivante
-        currentWeek++;
-        if (currentWeek > 52) {
-            // Vérifier si l'année a réellement 53 semaines
-            const lastDayOfYear = new Date(currentYear, 11, 31);
-            const lastWeekInfo = getISOWeek(lastDayOfYear);
+        // Semaine suivante
+        monday.setDate(monday.getDate() + 7);
+      }
 
-            if (lastWeekInfo.week === 53 && currentWeek <= 53) {
-                // L'année a 53 semaines, continuer
-                currentWeek++;
-            }
+      ics += "END:VCALENDAR\r\n";
 
-            if (currentWeek > 53 || (currentWeek > 52 && lastWeekInfo.week !== 53)) {
-                currentWeek = 1;
-                currentYear++;
-            }
-        }
+      res.set("Content-Type", "text/calendar; charset=utf-8");
+      res.status(200).send(ics);
+    } catch (err) {
+      console.error("ICS generation error", err);
+      res.status(500).send("Error generating calendar");
     }
-
-    // Fermeture du calendrier
-    icsContent += 'END:VCALENDAR';
-
-    return icsContent;
-}
-
-/**
- * Fonction Cloud déployée publiquement
- * URL: https://europe-west1-kitchen-duty-75864.cloudfunctions.net/kitchenDutyCalendar
- */
-exports.kitchenDutyCalendar = functions
-    .region('europe-west1')
-    .runWith({
-        timeoutSeconds: 60,
-        memory: '256MB'
-    })
-    .https.onRequest(async (req, res) => {
-        try {
-            // Générer le contenu ICS
-            const icsContent = await generateICSContent();
-
-            // Définir les en-têtes de réponse
-            res.set('Content-Type', 'text/calendar; charset=utf-8');
-            res.set('Content-Disposition', 'attachment; filename="kitchen-duty.ics"');
-            res.set('Cache-Control', 'public, max-age=3600'); // Cache 1 heure
-
-            // Permettre CORS
-            res.set('Access-Control-Allow-Origin', '*');
-            res.set('Access-Control-Allow-Methods', 'GET');
-
-            // Envoyer le contenu
-            res.status(200).send(icsContent);
-        } catch (error) {
-            console.error('Erreur lors de la génération du calendrier:', error);
-            res.status(500).send('Erreur lors de la génération du calendrier');
-        }
-    });
+  }
+);
